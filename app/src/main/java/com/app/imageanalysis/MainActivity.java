@@ -1,42 +1,61 @@
 package com.app.imageanalysis;
 
-import static retrofit2.converter.gson.GsonConverterFactory.create;
-
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.Matrix;
+import android.media.ExifInterface;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.StrictMode;
 import android.provider.MediaStore;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
-
-import com.app.imageanalysis.BuildConfig;
+import android.widget.TextView;
 
 import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.FileProvider;
 
-import com.google.gson.GsonBuilder;
+import com.microsoft.azure.cognitiveservices.vision.computervision.ComputerVisionClient;
+import com.microsoft.azure.cognitiveservices.vision.computervision.ComputerVisionManager;
+import com.microsoft.azure.cognitiveservices.vision.computervision.models.ImageAnalysis;
+import com.microsoft.azure.cognitiveservices.vision.computervision.models.ImageTag;
+import com.microsoft.azure.cognitiveservices.vision.computervision.models.VisualFeatureTypes;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.text.DecimalFormat;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 
-import retrofit2.Retrofit;
 
 public class MainActivity extends AppCompatActivity {
 
     Button CameraButton;
     ImageView imageView;
+    TextView textViewResultado;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
+        if (android.os.Build.VERSION.SDK_INT > 9) {
+            StrictMode.ThreadPolicy gfgPolicy =
+                    new StrictMode.ThreadPolicy.Builder().permitAll().build();
+            StrictMode.setThreadPolicy(gfgPolicy);
+        }
+
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        CameraButton = (Button) findViewById(R.id.CameraButton);
-        imageView = (ImageView) findViewById(R.id.imageView);
+        CameraButton = findViewById(R.id.CameraButton);
+        imageView = findViewById(R.id.imageView);
+        textViewResultado = findViewById(R.id.textViewResultado);
 
         String ha = BuildConfig.API_KEY;
 
@@ -64,31 +83,51 @@ public class MainActivity extends AppCompatActivity {
             if(result.getResultCode()== RESULT_OK) {
                 Bundle extras = result.getData().getExtras();
                 Bitmap imgBitmap = (Bitmap) extras.get("data");
-
-
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 imgBitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos);
                 byte[] b = baos.toByteArray();
-                String imageEncoded = null;
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    imageEncoded = Base64.getEncoder().encodeToString(b);
+
+                String subscriptionKey = BuildConfig.API_KEY;
+                String endpoint = BuildConfig.BASE_URL;
+
+                ComputerVisionClient compVisClient = Authenticate(subscriptionKey, endpoint);
+
+                try {
+                    List<VisualFeatureTypes> featuresToExtractFromRemoteImage = new ArrayList<>();
+                    featuresToExtractFromRemoteImage.add(VisualFeatureTypes.TAGS);
+                    ImageAnalysis analysis = compVisClient.computerVision().analyzeImageInStream().withImage(b)
+                            .withVisualFeatures(featuresToExtractFromRemoteImage).withLanguage("es").execute();
+
+                    ImageTag primerTag = analysis.tags().get(0);
+                    DecimalFormat df = new DecimalFormat();
+                    df.setMaximumFractionDigits(2);
+                    float seguridad = (float) (primerTag.confidence()*100);
+                    float seguridadFixed = Float.parseFloat(df.format(seguridad));
+
+                    if(imgBitmap.getWidth()>imgBitmap.getHeight())
+                    {
+                        Matrix matrix = new Matrix();
+                        matrix.postRotate(90);
+                        Bitmap imagenRotada =  Bitmap.createBitmap(imgBitmap, 0, 0, imgBitmap.getWidth(), imgBitmap.getHeight(), matrix, true);
+                        imageView.setImageBitmap(imagenRotada);
+                    }
+                    else {
+                        imageView.setImageBitmap(imgBitmap);
+                    }
+                    textViewResultado.setText("OBJETO: "+primerTag.name()+ " SEGURIDAD: "+seguridadFixed);
+
+                } catch (Exception e)
+                {
+                    e.printStackTrace();
                 }
 
-                Retrofit retrofit = new Retrofit.Builder()
-                        .baseUrl(BuildConfig.BASE_URL)
-                        .addConverterFactory(create(
-                                new GsonBuilder().serializeNulls().create()
-                        ))
-                        .build();
 
-                //ComputerVisionAPIService pokemonApiService = retrofit.create(PokemonAPIService.class);
-                //Call call = pokemonApiService.getPokemons();
-
-                System.out.println(imageEncoded);
-                imageView.setImageBitmap(imgBitmap);
-
-
-                /* -- BASE64 -> BITMAP. --
+                /*
+                String imageEncoded = null;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    imageEncoded = Base64.getEncoder().encodeToString(b);
+                }
+                 -- BASE64 -> BITMAP. --
                 Bitmap image = null;
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                     byte[] imageDecoded = Base64.getDecoder().decode(imageEncoded);
@@ -99,4 +138,8 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     });
+
+    private ComputerVisionClient Authenticate(String subscriptionKey, String endpoint) {
+        return ComputerVisionManager.authenticate(subscriptionKey).withEndpoint(endpoint);
+    }
 }

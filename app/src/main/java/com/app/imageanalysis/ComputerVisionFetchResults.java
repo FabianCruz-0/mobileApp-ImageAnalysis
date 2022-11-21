@@ -1,3 +1,5 @@
+package com.app.imageanalysis;
+
 import com.google.gson.annotations.SerializedName;
 
 import java.util.ArrayList;
