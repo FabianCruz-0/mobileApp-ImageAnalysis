@@ -1,5 +1,6 @@
 plugins {
     id 'com.android.application'
+    id 'com.google.gms.google-services'
 }
 
 android {
@@ -20,6 +21,7 @@ android {
 
         buildConfigField 'String', 'API_KEY', properties.getProperty('API_KEY', '"xxx"')
         buildConfigField 'String', 'BASE_URL', properties.getProperty('BASE_URL', '"xxx"')
+        buildConfigField 'String', 'CLIENT_ID', properties.getProperty('CLIENT_ID', '"xxx"')
     }
 
     buildTypes {
@@ -44,6 +46,9 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.8.6'
     implementation 'com.microsoft.azure.cognitiveservices:azure-cognitiveservices-computervision:1.0.9-beta'
     implementation 'com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava'
+    implementation platform('com.google.firebase:firebase-bom:31.1.0')
+    implementation 'com.google.firebase:firebase-auth'
+    implementation 'com.google.android.gms:play-services-auth:20.4.0'
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.3'
